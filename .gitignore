@@ -1,0 +1,6 @@
+.DS_Store
+
+# Internal deployment notes — deliberately NOT published.
+# Contains editorial open items (roster blocker, reviewer notes) that should
+# not be readable by the public in a public repository.
+DEPLOY.md
