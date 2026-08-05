@@ -612,57 +612,73 @@ document.addEventListener('DOMContentLoaded', async function() {
 
      The cover image is designed for the front of the printed report and does
      not belong on the site: the page already opens with its own hero, and the
-     artwork carries "Twenty offices" burnt into the pixels, which now
-     contradicts the corrected "Nineteen offices asked" everywhere else.
+     artwork carries "Twenty offices" burnt into the pixels, which contradicts
+     the corrected "Nineteen offices asked" everywhere else on the page.
 
      Only the image is hidden. Its section also carries the cover line and the
-     publication date, which are not repeated anywhere else on the page, so the
-     section itself is kept and tightened up into a dateline bar.
+     publication date, which appear nowhere else, so the section is kept and
+     tightened into a dateline bar.
 
-     Done in CSS rather than script on purpose: a rule keeps applying to nodes
-     the bundle re-creates on re-render, so no observer is needed here.
+     The stylesheet is injected into <head> from script, NOT written as a plain
+     <style> tag here: this page is a compiled bundle that clears document.body
+     when it mounts, which deletes anything left in the body. The belt-and-braces
+     DOM collapse below covers the moment before the style lands and any browser
+     without :has().
 
      To bring the artwork back, delete this whole block.
 =========================================================================== -->
-<style id="irg-hide-cover">
-  /* The printed cover artwork. */
-  img[alt*="cover" i] { display: none !important; }
-
-  /* Its wrapper collapses to nothing; drop the padding it was holding open. */
-  section > div:has(> img[alt*="cover" i]) { padding: 0 !important; }
-</style>
 <script>
 (function(){
   "use strict";
-  /* :has() is unsupported in older Safari and Firefox, so collapse the wrapper
-     directly as well. Cheap, idempotent, and re-applied on re-render. */
+  var CSS = '' +
+    'img[alt*="cover" i]{display:none!important;}' +
+    'section > div:has(> img[alt*="cover" i]){padding:0!important;}';
+
+  var styleEl;
+  function ensureStyle(){
+    if(styleEl && styleEl.isConnected) return;
+    styleEl = document.getElementById("irg-hide-cover");
+    if(!styleEl){
+      styleEl = document.createElement("style");
+      styleEl.id = "irg-hide-cover";
+      styleEl.appendChild(document.createTextNode(CSS));
+    }
+    (document.head || document.documentElement).appendChild(styleEl);
+  }
+
   function tidy(){
-    var img = document.querySelector('img[alt*="cover" i], img[alt*="Cover" i]');
+    ensureStyle();
+    var img = document.querySelector('img[alt*="cover" i]');
     if(!img) return;
     var sec = img.closest("section");
     if(!sec) return;
+
+    /* Collapse the wrapper that held the artwork. */
     var holder = img.parentElement;
     while(holder && holder.parentElement !== sec) holder = holder.parentElement;
     if(holder && holder.parentElement === sec && holder.getAttribute("data-irg-collapsed") !== "1"){
       holder.setAttribute("data-irg-collapsed", "1");
-      holder.style.padding = "0";
-      holder.style.height = "0";
+      holder.style.padding  = "0";
+      holder.style.height   = "0";
       holder.style.overflow = "hidden";
     }
+
     /* Give the remaining cover line / publication date room to breathe. */
     var bar = sec.lastElementChild;
     if(bar && bar !== holder && bar.getAttribute("data-irg-bar") !== "1"){
       bar.setAttribute("data-irg-bar", "1");
-      bar.style.borderTop = "none";
+      bar.style.borderTop  = "none";
       bar.style.paddingTop = "26px";
     }
   }
+
   var queued = false;
   function schedule(){
     if(queued) return;
     queued = true;
     (window.requestAnimationFrame || setTimeout)(function(){ queued = false; tidy(); });
   }
+
   function start(){
     tidy();
     if(window.MutationObserver){
@@ -670,6 +686,232 @@ document.addEventListener('DOMContentLoaded', async function() {
     }
     [400, 1200, 2500].forEach(function(ms){ setTimeout(tidy, ms); });
   }
+
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
+})();
+</script>
+
+<!-- ===========================================================================
+     "At a glance" stat band — replaces the default four-tile strip.
+
+     WHY
+     The stock strip renders four values of very different shapes ("19",
+     "Same day → 169", "6 pass · 5 fail", "⚠ 74"). Each wraps to a different
+     number of lines, so no two numerals share a baseline and the row reads as
+     four unrelated boxes. This rebuild pulls the numeral out of each value and
+     sets it as the dominant element, with the words demoted to support, so all
+     four align and scan as one set.
+
+     The dawn motif — a low gold sunrise and fine rays along the horizon rule —
+     ties the band to the report's own identity without competing with the
+     hero. It is decorative only and carries aria-hidden.
+
+     DATA
+     Values are read from the original strip at runtime and re-read on every
+     re-render, so the live silence counter stays live. Nothing is hardcoded.
+     If the original strip ever disappears, this band removes itself rather
+     than showing stale numbers.
+
+     The stylesheet is injected into <head> from script: this page is a
+     compiled bundle that clears document.body on mount, which deletes anything
+     left in the body.
+
+     To restore the stock strip, delete this whole block.
+=========================================================================== -->
+<script>
+(function(){
+  "use strict";
+
+  var CSS = '' +
+  '#irg-band{position:relative;overflow:hidden;background:#F7F9FC;' +
+    'border-top:1px solid #E4E9F1;border-bottom:1px solid #D8DEE9;}' +
+  '#irg-band .bd-sun{position:absolute;left:50%;bottom:-190px;width:620px;height:380px;' +
+    'transform:translateX(-50%);pointer-events:none;}' +
+  '#irg-band .bd-glow{position:absolute;inset:0;border-radius:50% 50% 0 0;' +
+    'background:radial-gradient(ellipse at 50% 100%,rgba(191,144,0,.20) 0%,rgba(191,144,0,.09) 38%,rgba(191,144,0,0) 70%);}' +
+  '#irg-band .bd-rays{position:absolute;inset:0;' +
+    'background:repeating-conic-gradient(from 200deg at 50% 100%,rgba(191,144,0,.16) 0deg .5deg,rgba(191,144,0,0) .5deg 5deg);' +
+    '-webkit-mask-image:radial-gradient(ellipse at 50% 100%,#000 8%,rgba(0,0,0,.35) 42%,transparent 72%);' +
+    'mask-image:radial-gradient(ellipse at 50% 100%,#000 8%,rgba(0,0,0,.35) 42%,transparent 72%);}' +
+  '#irg-band .bd-in{position:relative;max-width:1320px;margin:0 auto;padding:30px 28px 34px;}' +
+  '#irg-band .bd-eyebrow{font:700 10.5px/1 Arial,Helvetica,sans-serif;letter-spacing:.18em;' +
+    'text-transform:uppercase;color:#8B95A6;margin:0 0 20px;}' +
+  '#irg-band .bd-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:26px;}' +
+  '#irg-band .bd-cell{display:grid;gap:9px;align-content:start;min-width:0;}' +
+  '#irg-band .bd-pre{font:700 11px/1.3 Arial,Helvetica,sans-serif;letter-spacing:.1em;' +
+    'text-transform:uppercase;color:#8B95A6;min-height:14px;}' +
+  '#irg-band .bd-num{font-family:Georgia,"Times New Roman",serif;font-weight:700;font-size:46px;' +
+    'line-height:1;color:#1F3864;letter-spacing:-.01em;display:flex;align-items:baseline;gap:8px;' +
+    'white-space:nowrap;}' +
+  '#irg-band .bd-num .bd-sm{font-size:19px;font-weight:700;color:#5A7099;letter-spacing:0;}' +
+  '#irg-band .bd-rule{width:38px;height:2px;background:#BF9000;}' +
+  '#irg-band .bd-lab{font:13px/1.55 Arial,Helvetica,sans-serif;color:#5A5A5A;max-width:30ch;}' +
+  '#irg-band .bd-alert .bd-num,#irg-band .bd-alert .bd-num .bd-sm{color:#B3261E;}' +
+  '#irg-band .bd-alert .bd-pre{color:#B3261E;}' +
+  '#irg-band .bd-alert .bd-rule{background:#B3261E;}' +
+  '@media (max-width:1000px){#irg-band .bd-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:26px 24px;}}' +
+  '@media (max-width:560px){#irg-band .bd-grid{grid-template-columns:minmax(0,1fr);}' +
+    '#irg-band .bd-in{padding:24px 18px 26px;}#irg-band .bd-num{font-size:40px;}}' +
+  '@media (prefers-reduced-motion:no-preference){#irg-band .bd-cell{animation:irg-pop 700ms cubic-bezier(.34,1.3,.64,1) both;}}' +
+  '@media print{#irg-band .bd-sun{display:none;}}';
+
+  var styleEl, band;
+
+  function ensureStyle(){
+    if(styleEl && styleEl.isConnected) return;
+    styleEl = document.getElementById("irg-band-style");
+    if(!styleEl){
+      styleEl = document.createElement("style");
+      styleEl.id = "irg-band-style";
+      styleEl.appendChild(document.createTextNode(CSS));
+    }
+    (document.head || document.documentElement).appendChild(styleEl);
+  }
+
+  /* The stock strip: the grid whose first tile mentions offices asked. */
+  function findStrip(){
+    var divs = document.querySelectorAll("div");
+    for(var i=0;i<divs.length;i++){
+      var d = divs[i];
+      if(d.id === "irg-band" || d.closest("#irg-band")) continue;
+      var t = d.innerText || "";
+      if(/state offices asked for their tracking/i.test(t) && t.length < 140 && d.children.length <= 3){
+        return d.parentElement;
+      }
+    }
+    return null;
+  }
+
+  function readStats(strip){
+    var out = [];
+    for(var i=0;i<strip.children.length;i++){
+      var c = strip.children[i];
+      var value = (c.children[0] ? c.children[0].innerText : "").trim();
+      var label = (c.children[1] ? c.children[1].innerText : "").trim();
+      if(!value) continue;
+
+      /* Split the value into a dominant numeral and its supporting words, so
+         every cell presents the same shape regardless of the source string. */
+      var pre = "", num = value, sm = "", alert = false;
+
+      if(/^⚠/.test(value)){                       // "⚠ 74"
+        alert = true;
+        pre = "Days of silence";
+        num = value.replace(/^⚠\s*/, "");
+      } else if(/→/.test(value)){                  // "Same day → 169"
+        var parts = value.split("→");
+        pre = parts[0].trim() + " →";
+        num = parts[1].trim();
+      } else if(/pass/i.test(value)){              // "6 pass · 5 fail"
+        var m = value.match(/(\d+)\s*pass[^\d]*(\d+)\s*fail/i);
+        if(m){ pre = "Pass · Fail"; num = m[1]; sm = "· " + m[2]; }
+      } else {                                     // "19"
+        pre = "Offices asked";
+      }
+      out.push({ pre: pre, num: num, sm: sm, label: label, alert: alert });
+    }
+    return out;
+  }
+
+  function render(stats){
+    var wrap = document.createElement("div");
+    wrap.id = "irg-band";
+
+    var sun = document.createElement("div");
+    sun.className = "bd-sun";
+    sun.setAttribute("aria-hidden", "true");
+    var glow = document.createElement("div"); glow.className = "bd-glow";
+    var rays = document.createElement("div"); rays.className = "bd-rays";
+    sun.appendChild(rays); sun.appendChild(glow);
+
+    var inner = document.createElement("div"); inner.className = "bd-in";
+    var eyebrow = document.createElement("p");
+    eyebrow.className = "bd-eyebrow";
+    eyebrow.appendChild(document.createTextNode("The record, at a glance"));
+    var grid = document.createElement("div"); grid.className = "bd-grid";
+
+    stats.forEach(function(s, i){
+      var cell = document.createElement("div");
+      cell.className = "bd-cell" + (s.alert ? " bd-alert" : "");
+      cell.style.animationDelay = (i * 70) + "ms";
+
+      var pre = document.createElement("div");
+      pre.className = "bd-pre";
+      pre.appendChild(document.createTextNode(s.pre));
+
+      var num = document.createElement("div");
+      num.className = "bd-num";
+      num.appendChild(document.createTextNode(s.num));
+      if(s.sm){
+        var sm = document.createElement("span");
+        sm.className = "bd-sm";
+        sm.appendChild(document.createTextNode(s.sm));
+        num.appendChild(sm);
+      }
+
+      var rule = document.createElement("div"); rule.className = "bd-rule";
+
+      var lab = document.createElement("div");
+      lab.className = "bd-lab";
+      lab.appendChild(document.createTextNode(s.label));
+
+      cell.appendChild(pre); cell.appendChild(num);
+      cell.appendChild(rule); cell.appendChild(lab);
+      grid.appendChild(cell);
+    });
+
+    inner.appendChild(eyebrow); inner.appendChild(grid);
+    wrap.appendChild(sun); wrap.appendChild(inner);
+    return wrap;
+  }
+
+  function signature(stats){
+    return stats.map(function(s){ return s.pre + "|" + s.num + "|" + s.sm + "|" + s.label; }).join("~");
+  }
+
+  var lastSig = null;
+
+  function sync(){
+    ensureStyle();
+    var strip = findStrip();
+
+    if(!strip){
+      /* Source gone — remove our band rather than show stale figures. */
+      if(band && band.parentNode){ band.parentNode.removeChild(band); band = null; lastSig = null; }
+      return;
+    }
+
+    var stats = readStats(strip);
+    if(stats.length !== 4) return;
+
+    strip.style.display = "none";
+
+    var sig = signature(stats);
+    if(band && band.isConnected && sig === lastSig) return;
+
+    var fresh = render(stats);
+    if(band && band.parentNode) band.parentNode.replaceChild(fresh, band);
+    else strip.parentNode.insertBefore(fresh, strip);
+    band = fresh;
+    lastSig = sig;
+  }
+
+  var queued = false;
+  function schedule(){
+    if(queued) return;
+    queued = true;
+    (window.requestAnimationFrame || setTimeout)(function(){ queued = false; sync(); });
+  }
+
+  function start(){
+    sync();
+    if(window.MutationObserver){
+      new MutationObserver(schedule).observe(document.documentElement, {childList:true, subtree:true, characterData:true});
+    }
+    [400, 1200, 2500].forEach(function(ms){ setTimeout(sync, ms); });
+  }
+
   if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
   else start();
 })();
