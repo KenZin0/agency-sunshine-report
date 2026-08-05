@@ -607,5 +607,73 @@ document.addEventListener('DOMContentLoaded', async function() {
   else start();
 })();
 </script>
+<!-- ===========================================================================
+     Hide the PDF cover artwork on the web page.
+
+     The cover image is designed for the front of the printed report and does
+     not belong on the site: the page already opens with its own hero, and the
+     artwork carries "Twenty offices" burnt into the pixels, which now
+     contradicts the corrected "Nineteen offices asked" everywhere else.
+
+     Only the image is hidden. Its section also carries the cover line and the
+     publication date, which are not repeated anywhere else on the page, so the
+     section itself is kept and tightened up into a dateline bar.
+
+     Done in CSS rather than script on purpose: a rule keeps applying to nodes
+     the bundle re-creates on re-render, so no observer is needed here.
+
+     To bring the artwork back, delete this whole block.
+=========================================================================== -->
+<style id="irg-hide-cover">
+  /* The printed cover artwork. */
+  img[alt*="cover" i] { display: none !important; }
+
+  /* Its wrapper collapses to nothing; drop the padding it was holding open. */
+  section > div:has(> img[alt*="cover" i]) { padding: 0 !important; }
+</style>
+<script>
+(function(){
+  "use strict";
+  /* :has() is unsupported in older Safari and Firefox, so collapse the wrapper
+     directly as well. Cheap, idempotent, and re-applied on re-render. */
+  function tidy(){
+    var img = document.querySelector('img[alt*="cover" i], img[alt*="Cover" i]');
+    if(!img) return;
+    var sec = img.closest("section");
+    if(!sec) return;
+    var holder = img.parentElement;
+    while(holder && holder.parentElement !== sec) holder = holder.parentElement;
+    if(holder && holder.parentElement === sec && holder.getAttribute("data-irg-collapsed") !== "1"){
+      holder.setAttribute("data-irg-collapsed", "1");
+      holder.style.padding = "0";
+      holder.style.height = "0";
+      holder.style.overflow = "hidden";
+    }
+    /* Give the remaining cover line / publication date room to breathe. */
+    var bar = sec.lastElementChild;
+    if(bar && bar !== holder && bar.getAttribute("data-irg-bar") !== "1"){
+      bar.setAttribute("data-irg-bar", "1");
+      bar.style.borderTop = "none";
+      bar.style.paddingTop = "26px";
+    }
+  }
+  var queued = false;
+  function schedule(){
+    if(queued) return;
+    queued = true;
+    (window.requestAnimationFrame || setTimeout)(function(){ queued = false; tidy(); });
+  }
+  function start(){
+    tidy();
+    if(window.MutationObserver){
+      new MutationObserver(schedule).observe(document.documentElement, {childList:true, subtree:true});
+    }
+    [400, 1200, 2500].forEach(function(ms){ setTimeout(tidy, ms); });
+  }
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+  else start();
+})();
+</script>
+
 </body>
 </html>
